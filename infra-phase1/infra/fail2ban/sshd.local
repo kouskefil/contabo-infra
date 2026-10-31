@@ -1,0 +1,23 @@
+# fail2ban — Phase 1.7
+# Cible : /etc/fail2ban/jail.d/sshd.local
+# Appliquer : sudo fail2ban-client -t && sudo systemctl restart fail2ban
+
+[DEFAULT]
+# Ne jamais bannir le serveur lui-même
+ignoreip = 127.0.0.1/8 ::1
+
+# 5 échecs en 10 minutes → bannissement d'1 heure
+findtime = 10m
+maxretry = 5
+bantime  = 1h
+
+# Récidive : la durée double à chaque nouveau bannissement, jusqu'à 1 semaine
+bantime.increment = true
+bantime.factor    = 2
+bantime.maxtime   = 1w
+
+[sshd]
+enabled = true
+backend = systemd
+# Détecte aussi les connexions abandonnées avant l'authentification
+mode    = aggressive

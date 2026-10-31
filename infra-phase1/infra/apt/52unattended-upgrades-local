@@ -1,0 +1,15 @@
+// Phase 1.8 — surcharges locales
+// Cible : /etc/apt/apt.conf.d/52unattended-upgrades-local
+// APT : la DERNIÈRE valeur lue l'emporte (52 > 50unattended-upgrades)
+
+// Nettoyer les anciens noyaux et dépendances devenues inutiles
+Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+Unattended-Upgrade::Remove-New-Unused-Dependencies "true";
+
+// Redémarrer automatiquement si nécessaire, à 4h30, même si une session est ouverte
+Unattended-Upgrade::Automatic-Reboot "true";
+Unattended-Upgrade::Automatic-Reboot-WithUsers "true";
+Unattended-Upgrade::Automatic-Reboot-Time "04:30";
+
+// Journaliser aussi dans syslog/journal
+Unattended-Upgrade::SyslogEnable "true";

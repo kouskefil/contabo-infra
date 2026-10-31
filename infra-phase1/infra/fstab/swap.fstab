@@ -1,0 +1,2 @@
+# Phase 1.9 — ligne ajoutée à /etc/fstab (fichier /swapfile de 4 Go, chmod 600)
+/swapfile none swap sw 0 0
