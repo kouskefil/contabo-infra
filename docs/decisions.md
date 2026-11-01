@@ -41,3 +41,26 @@
 
 ## 2026-10-31 — Fuseau horaire et NTP
 - Décision : Europe/Paris ; chrony (installé par défaut) conservé.
+
+## 2026-11-01 — Docker Engine depuis le dépôt officiel
+- Décision : docker-ce + buildx + compose v2 depuis download.docker.com (suite `resolute`).
+- Alternative écartée : paquet `docker.io` d'Ubuntu (souvent en retard).
+- Conséquence : Docker non couvert par unattended-upgrades → mise à jour manuelle (`sudo apt upgrade`), sans coupure grâce à live-restore.
+
+## 2026-11-01 — Groupe docker pour kouskefil
+- Décision : kouskefil membre du groupe `docker`, en connaissance de cause (équivalent root, contourne le mot de passe sudo).
+- Alternatives écartées : `sudo docker` systématique (pénible, incompatible avec le déploiement automatisé) ; Docker rootless (complexité, limites réseau).
+- Raison : la barrière principale reste la clé SSH (passphrase, AllowUsers).
+
+## 2026-11-01 — Configuration du démon Docker
+- Décision : logs json-file 10 Mo × 3 compressés ; `"ip": "127.0.0.1"` (ports publiés en local par défaut) ; live-restore ; no-new-privileges ; pools d'adresses 172.20.0.0/14 en /24.
+- Raison : éviter la saturation du disque par les logs et le contournement d'UFW par les ports publiés (constaté en test : un port publié sur 0.0.0.0 est joignable depuis Internet sans règle UFW).
+- Règle : jamais `0.0.0.0` dans un `ports:`, sauf pour le reverse proxy.
+
+## 2026-11-01 — Conventions des stacks Compose
+- Décision : une stack par dossier `stacks/<nom>/` ; compose.yaml versionné, `.env` sur le serveur uniquement (chmod 600) avec `.env.example` versionné ; durcissement par défaut (read_only, cap_drop ALL, limites, healthcheck, init, réseau dédié).
+
+## 2026-11-01 — Git comme source de vérité du serveur
+- Décision : dépôt `kouskefil/contabo-infra` cloné dans /srv/infra via une deploy key en lecture seule (alias SSH `github-infra`), `pull.ff only` ; `/srv/stacks` est un lien vers `/srv/infra/stacks`.
+- Alternatives écartées : copier-coller manuel (dérive, pas d'historique) ; clé SSH personnelle sur le serveur (accès à tout le compte GitHub).
+- Structure du dépôt : tout à la racine (pas de sous-dossier infra/).

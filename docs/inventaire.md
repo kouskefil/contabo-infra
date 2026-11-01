@@ -1,4 +1,4 @@
-# Inventaire — mis à jour le 2026-10-31 (fin de Phase 1)
+# Inventaire — mis à jour le 2026-11-01 (fin de Phase 2)
 
 ## Serveur
 | Élément | Valeur |
@@ -14,23 +14,41 @@
 ## Comptes
 | Compte | Rôle | Accès |
 |---|---|---|
-| kouskefil | administration (sudo avec mot de passe) | SSH par clé uniquement |
+| kouskefil | administration (sudo avec mot de passe, groupe docker) | SSH par clé uniquement |
 | root | — | console VNC uniquement |
 | ubuntu | défaut de l'image | verrouillé, nologin |
 
-## Ports exposés
+## Ports exposés sur Internet
 | Port | Service | Règle UFW |
 |---|---|---|
 | 22/tcp (v4 + v6) | sshd | limit |
 
+## Ports locaux (127.0.0.1)
+| Port | Service |
+|---|---|
+| 8090 | demo-web (nginx-unprivileged) |
+
 ## Services système
 | Service | Rôle | Config versionnée |
 |---|---|---|
-| ssh | accès distant | infra/ssh/00-hardening.conf |
+| ssh | accès distant | ssh/00-hardening.conf |
 | ufw | firewall | (règles : voir runbook) |
-| fail2ban | bannissement brute-force | infra/fail2ban/sshd.local |
-| unattended-upgrades | correctifs de sécurité, reboot auto 04:30 | infra/apt/ |
+| fail2ban | bannissement brute-force | fail2ban/sshd.local |
+| unattended-upgrades | correctifs de sécurité, reboot auto 04:30 | apt/ |
 | chrony | NTP | défaut |
+| docker | moteur de conteneurs (dépôt officiel, Compose v2) | docker/daemon.json |
+
+## Stacks Docker
+| Stack | Services | Image | Volumes | Exposition |
+|---|---|---|---|---|
+| demo | web | nginxinc/nginx-unprivileged:stable-alpine | aucun | 127.0.0.1:8090 |
+
+## Arborescence serveur
+| Chemin | Rôle |
+|---|---|
+| /srv/infra | clone lecture seule de kouskefil/contabo-infra |
+| /srv/stacks | lien → /srv/infra/stacks |
+| /srv/stacks/*/.env | secrets, hors Git, chmod 600 |
 
 ## Tâches planifiées
 | Timer | Rôle |
