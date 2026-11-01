@@ -1,0 +1,21 @@
+# Caddyfile — Phase 3.4
+# Un bloc par site exposé. Recharger après modification :
+#   docker compose exec -w /etc/caddy caddy caddy reload
+
+# En-têtes de sécurité communs, à importer dans chaque site
+(security_headers) {
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "geolocation=(), microphone=(), camera=()"
+		-Server
+	}
+}
+
+demo.kouskefil.tech {
+	import security_headers
+	encode zstd gzip
+	reverse_proxy demo-web:8080
+}

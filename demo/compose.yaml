@@ -1,0 +1,39 @@
+# Stack de démonstration — Phase 2.5, exposée via Caddy en Phase 3
+name: demo
+
+services:
+  web:
+    image: nginxinc/nginx-unprivileged:stable-alpine
+    restart: unless-stopped
+    init: true
+    # Plus de port publié : Caddy joint le service par le réseau "proxy"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 64M
+          pids: 100
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:8080/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    stop_grace_period: 10s
+    environment:
+      TZ: ${TZ:-Europe/Paris}
+    networks:
+      internal:
+      proxy:
+        aliases: [demo-web]   # nom unique utilisé par Caddy
+
+networks:
+  internal:
+  proxy:
+    external: true
