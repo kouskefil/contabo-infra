@@ -1,0 +1,40 @@
+# Stack de démonstration — Phase 2.5
+# Cible : /srv/stacks/demo/compose.yaml
+name: demo
+
+services:
+  web:
+    image: nginxinc/nginx-unprivileged:stable-alpine
+    restart: unless-stopped
+    init: true
+    # Exposé en local uniquement ; en Phase 3, c'est le reverse proxy qui publiera
+    ports:
+      - "127.0.0.1:8090:8080"
+    # Durcissement
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    # Ressources
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 64M
+          pids: 100
+    # Santé
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:8080/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    stop_grace_period: 10s
+    environment:
+      TZ: ${TZ:-Europe/Paris}
+    networks: [internal]
+
+networks:
+  internal:
