@@ -1,4 +1,4 @@
-# Inventaire — mis à jour le 2026-11-01 (fin de Phase 2)
+# Inventaire — mis à jour le 2026-11-03 (fin de Phase 3)
 
 ## Serveur
 | Élément | Valeur |
@@ -22,11 +22,11 @@
 | Port | Service | Règle UFW |
 |---|---|---|
 | 22/tcp (v4 + v6) | sshd | limit |
+| 80/tcp (v4) | Caddy (ACME + redirection HTTPS) | allow |
+| 443/tcp + 443/udp (v4) | Caddy (HTTPS, HTTP/3) | allow |
 
 ## Ports locaux (127.0.0.1)
-| Port | Service |
-|---|---|
-| 8090 | demo-web (nginx-unprivileged) |
+Aucun.
 
 ## Services système
 | Service | Rôle | Config versionnée |
@@ -41,7 +41,19 @@
 ## Stacks Docker
 | Stack | Services | Image | Volumes | Exposition |
 |---|---|---|---|---|
-| demo | web | nginxinc/nginx-unprivileged:stable-alpine | aucun | 127.0.0.1:8090 |
+| proxy | caddy | caddy:2.11.7-alpine | caddy_data (certificats), caddy_config | 0.0.0.0:80, 443/tcp, 443/udp |
+| demo | web | nginxinc/nginx-unprivileged:stable-alpine | aucun | via Caddy (alias demo-web sur le réseau proxy) |
+
+## Réseaux Docker
+| Réseau | Rôle |
+|---|---|
+| proxy (external) | Caddy ↔ applications exposées |
+| <stack>_internal | réseau privé de chaque stack |
+
+## Domaines exposés
+| Domaine | Service | Certificat | Contrôles |
+|---|---|---|---|
+| demo.kouskefil.tech | demo-web:8080 | Let's Encrypt (YE2), renouvellement auto par Caddy | SSL Labs A+, Security Headers A |
 
 ## Arborescence serveur
 | Chemin | Rôle |
@@ -59,4 +71,8 @@
 ## DNS (OVH)
 | Enregistrement | Cible | État |
 |---|---|---|
-| app, gitlab, jenkins, registry (A) | 75.119.129.90 | orphelins, à nettoyer en Phase 3 |
+| @ (A), www (A) | 75.119.129.90 | non servis pour l'instant |
+| demo (A) | 75.119.129.90 | servi par Caddy |
+| api (A) | 75.119.129.90 | réservé, non servi |
+| @ CAA | 0 issue "letsencrypt.org" | actif |
+| @ MX, SPF, DKIM (ovhmo-selector-1/2) | messagerie OVH | ne pas modifier |

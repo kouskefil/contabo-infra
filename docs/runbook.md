@@ -51,9 +51,31 @@
 - Valider un compose : `docker compose config --quiet`
 
 ## Déploiement depuis Git
-1. Mac : modifier dans le dépôt, commit, push.
+1. Mac : modifier dans le dépôt, commit, push. Archives fournies : `unzip -o <archive>.zip` depuis la racine du dépôt (jamais de double-clic).
 2. Serveur : `git -C /srv/infra pull` (fast-forward uniquement), puis `docker compose up -d` dans la stack concernée.
 - `git -C /srv/infra status --short --ignored` ne doit montrer que des lignes `!!` (.env).
 - Annuler une modification locale accidentelle : `git -C /srv/infra checkout -- <fichier>`
+- Récupérer un fichier tel qu'il était dans un commit : `git show <commit>:<chemin> > <chemin>`
 - ⚠️ Ne jamais lancer `git clean -fdx` dans /srv/infra : supprime tous les `.env`.
 - Deploy key : ~/.ssh/github_infra_deploy (kouskefil), alias `github-infra`, lecture seule. Test : `ssh -T github-infra`.
+
+## Reverse proxy Caddy (/srv/stacks/proxy)
+- État : `cd /srv/stacks/proxy && docker compose ps` ; version : `docker compose exec caddy caddy version`
+- Logs : `docker compose logs -f --tail=100 caddy` ; certificats : `docker compose logs caddy | grep -iE 'certificate|error'`
+- Recharger le Caddyfile sans coupure (après git pull) : `docker compose exec -w /etc/caddy caddy caddy reload`
+- Valider avant rechargement : `docker compose exec -w /etc/caddy caddy caddy validate`
+- Changer de version : `docker pull caddy:<version>-alpine` pour vérifier le tag, modifier l'image dans compose.yaml (commit), puis `docker compose up -d`.
+- ⚠️ Ne jamais `docker compose down -v` sur cette stack : le volume caddy_data contient certificats et compte ACME (limites Let's Encrypt).
+- Échec de certificat : vérifier DNS (`dig +short @dns200.anycast.me <nom> A`), port 80 joignable, CAA. Ne pas redémarrer Caddy en boucle.
+- Contrôle externe : SSL Labs (ssllabs.com/ssltest) et securityheaders.com.
+
+## Exposer un nouveau service
+1. DNS OVH : enregistrement A `<nom>` → 75.119.129.90 ; vérifier avec dig.
+2. Stack de l'application : aucun `ports:` ; réseau `proxy` (external) avec alias unique `<stack>-<service>`.
+3. Caddyfile : bloc `<nom>.kouskefil.tech { import security_headers ; encode zstd gzip ; reverse_proxy <alias>:<port> }`.
+4. Commit/push, `git pull` sur le serveur, `docker compose up -d` de l'application, puis `caddy reload`.
+5. Vérifier : `curl -sI https://<nom>.kouskefil.tech`.
+- 502 Bad Gateway : `docker network inspect proxy --format '{{range .Containers}}{{.Name}} {{end}}'`
+
+## Réseau Docker partagé
+- `proxy` : créé une fois avec `docker network create proxy` (à recréer après une réinstallation, avant toute stack).

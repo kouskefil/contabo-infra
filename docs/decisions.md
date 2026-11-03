@@ -63,4 +63,17 @@
 ## 2026-11-01 — Git comme source de vérité du serveur
 - Décision : dépôt `kouskefil/contabo-infra` cloné dans /srv/infra via une deploy key en lecture seule (alias SSH `github-infra`), `pull.ff only` ; `/srv/stacks` est un lien vers `/srv/infra/stacks`.
 - Alternatives écartées : copier-coller manuel (dérive, pas d'historique) ; clé SSH personnelle sur le serveur (accès à tout le compte GitHub).
-- Structure du dépôt : tout à la racine (pas de sous-dossier infra/).
+- Structure du dépôt : tout à la racine (pas de sous-dossier infra/). Les archives se décompressent avec `unzip -o` depuis la racine du dépôt.
+
+## 2026-11-03 — Reverse proxy Caddy
+- Décision : Caddy (image figée caddy:2.11.7-alpine), configuration dans stacks/proxy/Caddyfile versionné.
+- Alternatives écartées : Traefik (labels dispersés, accès au socket Docker = équivalent root sur le composant le plus exposé ; l'ingress Traefik de k3s se configure autrement) ; Nginx (gestion manuelle des certificats).
+- Seule stack publiée sur 0.0.0.0 (80/tcp, 443/tcp, 443/udp). Les applications ne publient plus de port : elles rejoignent le réseau Docker externe `proxy` avec un alias unique (ex. demo-web).
+- En-têtes communs : HSTS 1 an (sans includeSubDomains), nosniff, X-Frame-Options DENY, Referrer-Policy, Permissions-Policy ; Server et Via retirés. CSP définie par application (Phase 5).
+- Validation externe (demo.kouskefil.tech) : SSL Labs A+, securityheaders.com A (seule la CSP manque, volontairement).
+
+## 2026-11-03 — DNS
+- Décision : un enregistrement A par service exposé, pas de wildcard ; IPv4 uniquement pour l'instant (AAAA reporté après validation IPv6 du proxy).
+- CAA `0 issue "letsencrypt.org"` sur la racine.
+- Nettoyage : gitlab, jenkins, registry, ftp, grafana, datadog supprimés ; api conservé. Messagerie OVH (MX, SPF, DKIM) inchangée.
+- Racine et www : pointent vers le VPS mais ne sont servis par rien pour l'instant (choix assumé).
