@@ -1,3 +1,4 @@
+#author: kouskefil
 # Caddyfile — Phase 3.4
 # Un bloc par site exposé. Recharger après modification :
 #   docker compose exec -w /etc/caddy caddy caddy reload
