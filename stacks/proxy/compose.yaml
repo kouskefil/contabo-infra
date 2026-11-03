@@ -4,8 +4,7 @@ name: proxy
 
 services:
   caddy:
-    # TODO : remplacer par la version exacte relevée avec `docker compose exec caddy caddy version`
-    image: caddy:2-alpine
+    image: caddy:2.11.7-alpine
     restart: unless-stopped
     ports:
       - "0.0.0.0:80:80"
