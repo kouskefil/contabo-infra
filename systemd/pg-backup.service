@@ -1,0 +1,14 @@
+# Cible : /etc/systemd/system/pg-backup.service — Phase 4.4
+[Unit]
+Description=Sauvegarde PostgreSQL (pg_dump de chaque base)
+Wants=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+User=kouskefil
+Group=kouskefil
+ExecStart=/srv/infra/stacks/postgres/scripts/backup.sh
+# Ne pas gêner les applications pendant la sauvegarde
+Nice=10
+IOSchedulingClass=idle

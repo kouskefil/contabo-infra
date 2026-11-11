@@ -1,0 +1,13 @@
+# Cible : /etc/systemd/system/pg-backup.timer — Phase 4.4
+[Unit]
+Description=Sauvegarde PostgreSQL chaque nuit
+
+[Timer]
+# 02:30, avant la fenêtre de reboot automatique (04:30)
+OnCalendar=*-*-* 02:30:00
+RandomizedDelaySec=10min
+# Si le serveur était éteint à l'heure prévue, rattraper au démarrage
+Persistent=true
+
+[Install]
+WantedBy=timers.target
