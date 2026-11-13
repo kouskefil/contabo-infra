@@ -13,18 +13,24 @@ Sur le serveur : clone en lecture seule dans `/srv/infra` (deploy key), `/srv/st
 ├── sysctl/99-swap.conf                → /etc/sysctl.d/
 ├── fstab/swap.fstab                   → ligne ajoutée à /etc/fstab
 ├── docker/daemon.json                 → /etc/docker/daemon.json
-├── stacks/<stack>/compose.yaml        → lancé depuis /srv/stacks/<stack>/
-│   └── .env.example                   (le .env réel reste sur le serveur, chmod 600)
+├── systemd/pg-backup.{service,timer}  → /etc/systemd/system/
+├── stacks/
+│   ├── proxy/      Caddy (seul service exposé sur Internet)
+│   ├── postgres/   PostgreSQL 18 + scripts (create-app-db, backup)
+│   └── demo/       stack modèle
 └── docs/  decisions.md · runbook.md · inventaire.md
 ```
 
-Les fichiers système (ssh, fail2ban, apt, sysctl, docker) sont copiés à la main vers leur cible : le dépôt en garde la référence.
+Les fichiers système sont copiés à la main vers leur cible : le dépôt en garde la référence.
+
+**Archives fournies** : toujours `unzip -o <archive>.zip` depuis la racine du dépôt (jamais de double-clic).
 
 **Secrets** : jamais dans ce dépôt (`.gitignore` : `.env`, `*.key`, `*.pem`, `secrets/`).
 
 ## Conventions des stacks Compose
 - `restart: unless-stopped`, `init: true`
-- ports toujours `127.0.0.1:<port>:<port>` (jamais `0.0.0.0`, sauf reverse proxy)
+- aucun `ports:` pour les applications : réseau `proxy` (exposition via Caddy) et/ou `db` (PostgreSQL), avec alias unique
+- `0.0.0.0` interdit, sauf pour Caddy
 - `read_only: true` + `tmpfs`, `cap_drop: [ALL]`, `no-new-privileges`
-- limites `cpus` / `memory` / `pids`, `healthcheck`, image versionnée
-- un réseau dédié par stack
+- limites `cpus` / `memory` / `pids`, `healthcheck`, image à version figée
+- secrets en fichiers (`secrets/`, chmod 600), montés en secrets Compose

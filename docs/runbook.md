@@ -79,3 +79,35 @@
 
 ## Réseau Docker partagé
 - `proxy` : créé une fois avec `docker network create proxy` (à recréer après une réinstallation, avant toute stack).
+
+## PostgreSQL (/srv/stacks/postgres)
+- État : `docker compose ps` ; version : `docker compose exec postgres psql -U postgres -tAc "SELECT version();"`
+- Console admin : `docker compose exec postgres psql -U postgres` ; depuis le Mac : tunnel SSH vers 127.0.0.1:5432.
+- Logs : `docker compose logs -f --tail=100 postgres` (requêtes > 500 ms journalisées)
+- Mise à jour mineure : `docker pull postgres:<version>-trixie`, changer le tag dans compose.yaml (commit), `docker compose up -d` (coupure de quelques secondes).
+- Changer un mot de passe : `ALTER ROLE <role> PASSWORD '...'` dans psql, puis mettre à jour le fichier secret correspondant. Modifier secrets/postgres_password n'a aucun effet après l'initialisation.
+- ⚠️ Jamais `docker compose down -v` : supprime le volume postgres_data.
+
+## Nouvelle application avec base de données
+1. `cd /srv/stacks/postgres && ./scripts/create-app-db.sh <app>`
+2. Mot de passe : /srv/stacks/<app>/secrets/db_password (à monter en secret Compose dans la stack de l'application).
+3. Stack de l'application : réseau `db` (external), connexion à `postgres:5432`, base et utilisateur `<app>`.
+
+## Sauvegardes PostgreSQL
+- Automatique : timer `pg-backup.timer` à 02:30 → /srv/backups/postgres/<AAAA-MM-JJ_HHMM>/ (7 conservées).
+- État : `systemctl list-timers pg-backup.timer` ; échecs : `systemctl --failed` ; logs : `journalctl -u pg-backup.service -n 20`
+- Sauvegarde manuelle (avant une opération risquée) : `/srv/infra/stacks/postgres/scripts/backup.sh`
+- Intégrité : `cd /srv/backups/postgres/<dossier> && sha256sum -c SHA256SUMS`
+- Modifier le timer : éditer systemd/ dans Git, puis `sudo cp /srv/infra/systemd/pg-backup.* /etc/systemd/system/ && sudo systemctl daemon-reload`
+
+## Restaurer une base
+Variables : `LATEST=$(ls -1d /srv/backups/postgres/20* | tail -1)`, depuis /srv/stacks/postgres.
+- **Vérifier sans risque** (base séparée) :
+  `docker compose exec -T postgres psql -U postgres -c "CREATE DATABASE <app>_restore_test;"`
+  `docker compose exec -T postgres pg_restore -U postgres -d <app>_restore_test --exit-on-error < "$LATEST/<app>.dump"`
+- **Remplacer une base endommagée** ⚠️ (faire d'abord une sauvegarde manuelle de l'état endommagé) :
+  `docker compose exec -T postgres psql -U postgres -c "DROP DATABASE <app> WITH (FORCE);"`
+  `docker compose exec -T postgres pg_restore -U postgres -C -d postgres --exit-on-error < "$LATEST/<app>.dump"`
+  → recrée la base avec son propriétaire et ses droits.
+- **Serveur neuf** : restaurer d'abord les rôles (`docker compose exec -T postgres psql -U postgres < "$LATEST/globals.sql"`), puis chaque base avec `pg_restore -C`.
+- Vérifier : comparer `SELECT count(*)` et les droits (`SELECT datacl FROM pg_database WHERE datname='<app>'`).

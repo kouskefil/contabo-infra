@@ -77,3 +77,22 @@
 - CAA `0 issue "letsencrypt.org"` sur la racine.
 - Nettoyage : gitlab, jenkins, registry, ftp, grafana, datadog supprimés ; api conservé. Messagerie OVH (MX, SPF, DKIM) inchangée.
 - Racine et www : pointent vers le VPS mais ne sont servis par rien pour l'instant (choix assumé).
+
+## 2026-11-03 — PostgreSQL conteneurisé
+- Décision : PostgreSQL 18 dans un conteneur (image postgres:18.6-trixie, Debian), volume nommé postgres_data monté sur /var/lib/postgresql (PGDATA = /var/lib/postgresql/18/docker).
+- Alternatives écartées : installation native (hors du modèle Git/Compose, migration k3s plus difficile) ; PostgreSQL 19 (sortie officielle le 19/11/2026, trop récente) ; image Alpine (collations musl, risque d'index incohérents).
+- Contrepartie assumée : mises à jour mineures manuelles (changement de tag, environ une fois par trimestre).
+- Réglages : shared_buffers 1 Go, effective_cache_size 4 Go, work_mem 16 Mo, maintenance_work_mem 256 Mo, data checksums, scram-sha-256, requêtes > 500 ms journalisées ; limite 4 Go / 2 CPU ; shm_size 256 Mo ; arrêt gracieux 60 s.
+- Mot de passe superutilisateur en secret Compose (secrets/postgres_password, chmod 600, hors Git), pas en variable d'environnement.
+- Accès : réseau Docker `db` (alias postgres) pour les applications ; 127.0.0.1:5432 pour l'administration via tunnel SSH. Jamais exposé sur Internet.
+
+## 2026-11-11 — Un rôle et une base par application
+- Décision : script create-app-db.sh : rôle LOGIN sans autre privilège, base dont il est propriétaire, REVOKE ALL FROM PUBLIC ; mot de passe aléatoire écrit dans /srv/stacks/<app>/secrets/db_password, jamais affiché. Bases postgres et template1 fermées aux rôles applicatifs.
+- Règle : aucune application ne se connecte avec le rôle postgres.
+- Vérifié : un rôle applicatif ne peut ni se connecter aux autres bases, ni créer de base, ni créer de rôle.
+
+## 2026-11-11 — Sauvegardes PostgreSQL
+- Décision : pg_dump (format custom) de chaque base applicative + pg_dumpall --globals-only, chaque nuit à 02:30 (timer systemd, Persistent=true), vérification par pg_restore --list et SHA256SUMS, publication atomique, 7 sauvegardes conservées dans /srv/backups/postgres. RPO accepté : 24 h.
+- Alternatives écartées : copie des fichiers à chaud (incohérente) ; archivage WAL avec pgBackRest/WAL-G (RPO de quelques minutes, complexité non justifiée aujourd'hui) ; cron (pas de rattrapage, logs perdus).
+- Restauration testée le 2026-11-11 : restauration dans une base séparée et reconstruction complète après suppression de table (pg_restore -C), empreintes MD5 et droits (datacl) identiques.
+- ⚠️ Point ouvert : les sauvegardes sont sur le VPS uniquement. Envoi chiffré hors VPS (restic) à mettre en place dès le choix de la destination (Backblaze B2 recommandé). Inclura aussi les secrets (.env, secrets/).

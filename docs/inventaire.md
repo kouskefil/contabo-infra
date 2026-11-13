@@ -1,4 +1,4 @@
-# Inventaire — mis à jour le 2026-11-03 (fin de Phase 3)
+# Inventaire — mis à jour le 2026-11-11 (fin de Phase 4)
 
 ## Serveur
 | Élément | Valeur |
@@ -26,7 +26,9 @@
 | 443/tcp + 443/udp (v4) | Caddy (HTTPS, HTTP/3) | allow |
 
 ## Ports locaux (127.0.0.1)
-Aucun.
+| Port | Service |
+|---|---|
+| 5432 | PostgreSQL (administration via tunnel SSH) |
 
 ## Services système
 | Service | Rôle | Config versionnée |
@@ -43,11 +45,13 @@ Aucun.
 |---|---|---|---|---|
 | proxy | caddy | caddy:2.11.7-alpine | caddy_data (certificats), caddy_config | 0.0.0.0:80, 443/tcp, 443/udp |
 | demo | web | nginxinc/nginx-unprivileged:stable-alpine | aucun | via Caddy (alias demo-web sur le réseau proxy) |
+| postgres | postgres | postgres:18.6-trixie | postgres_data | 127.0.0.1:5432 ; réseau db (alias postgres) |
 
 ## Réseaux Docker
 | Réseau | Rôle |
 |---|---|
 | proxy (external) | Caddy ↔ applications exposées |
+| db (external) | applications ↔ PostgreSQL |
 | <stack>_internal | réseau privé de chaque stack |
 
 ## Domaines exposés
@@ -60,13 +64,15 @@ Aucun.
 |---|---|
 | /srv/infra | clone lecture seule de kouskefil/contabo-infra |
 | /srv/stacks | lien → /srv/infra/stacks |
-| /srv/stacks/*/.env | secrets, hors Git, chmod 600 |
+| /srv/stacks/*/.env, /srv/stacks/*/secrets/ | secrets, hors Git, chmod 600 |
+| /srv/backups/postgres | sauvegardes PostgreSQL (7 conservées), chmod 700 |
 
 ## Tâches planifiées
 | Timer | Rôle |
 |---|---|
 | apt-daily.timer | rafraîchit la liste des paquets |
 | apt-daily-upgrade.timer | applique les correctifs de sécurité |
+| pg-backup.timer | 02:30 : sauvegarde PostgreSQL (systemd/pg-backup.*) |
 
 ## DNS (OVH)
 | Enregistrement | Cible | État |
@@ -76,3 +82,12 @@ Aucun.
 | api (A) | 75.119.129.90 | réservé, non servi |
 | @ CAA | 0 issue "letsencrypt.org" | actif |
 | @ MX, SPF, DKIM (ovhmo-selector-1/2) | messagerie OVH | ne pas modifier |
+
+## Bases PostgreSQL
+| Base | Propriétaire | Secret | Sauvegarde |
+|---|---|---|---|
+| demo | demo | /srv/stacks/demo/secrets/db_password | nocturne, restauration testée le 2026-11-11 |
+
+## Points ouverts
+- ⚠️ Sauvegardes uniquement sur le VPS : envoi chiffré hors VPS (restic) à mettre en place, destination à choisir.
+- Mot de passe superutilisateur PostgreSQL à ranger dans le gestionnaire de mots de passe.
