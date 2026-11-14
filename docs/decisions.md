@@ -96,3 +96,16 @@
 - Alternatives écartées : copie des fichiers à chaud (incohérente) ; archivage WAL avec pgBackRest/WAL-G (RPO de quelques minutes, complexité non justifiée aujourd'hui) ; cron (pas de rattrapage, logs perdus).
 - Restauration testée le 2026-11-11 : restauration dans une base séparée et reconstruction complète après suppression de table (pg_restore -C), empreintes MD5 et droits (datacl) identiques.
 - ⚠️ Point ouvert : les sauvegardes sont sur le VPS uniquement. Envoi chiffré hors VPS (restic) à mettre en place dès le choix de la destination (Backblaze B2 recommandé). Inclura aussi les secrets (.env, secrets/).
+
+## 2026-11-14 — CI/CD : GitLab CI retenu, Nexus écarté (à mettre en œuvre en Phase 7)
+- Décision : GitLab CI préféré à GitHub Actions ; pas de Nexus (le registry de GitLab ou un registry léger suffira).
+- Refusé : installer GitLab + Nexus dès la Phase 5 (8 Go minimum pour GitLab, 4 à 8 Go pour Nexus, aucune observabilité en place, GitLab 18 n'accepte pas PostgreSQL 18).
+- À trancher en Phase 7 : GitLab auto-hébergé en mode mémoire réduite, ou gitlab.com avec un runner sur le VPS.
+
+## 2026-11-14 — Première application : service SOAP clients-ws
+- Décision : première application en SOAP (et non REST), contract-first avec Spring Web Services : le XSD est la source de vérité, classes JAXB générées à la compilation, WSDL généré à l'exécution, validation XSD des requêtes et réponses, exceptions métier traduites en SOAP Fault (@SoapFault).
+- Pile : Spring Boot 4.1.1, Java 21, Maven, JPA + Flyway sur la base `clients`. Pas encore de tests automatisés (prévus en 5.3).
+- Dépôt séparé `kouskefil/clients-ws` (code) ; la stack Compose reste dans contabo-infra (stacks/clients). Image construite sur le VPS depuis /srv/apps/clients-ws (deploy key en lecture seule, alias `github-clients-ws`), en attendant la CI de la Phase 7.
+- Secret de base lu par Spring via configtree (/run/secrets/db_password) ; conteneur exécuté avec l'UID de kouskefil pour pouvoir lire le fichier secret (les secrets Compose de type fichier gardent les droits de l'hôte).
+- Actuator sur un port d'administration séparé (8081), jamais exposé.
+- Exposition : 127.0.0.1:8085 uniquement tant que le service n'a pas d'authentification ; exposition publique après WS-Security (5.2).

@@ -1,4 +1,4 @@
-# Inventaire — mis à jour le 2026-11-11 (fin de Phase 4)
+# Inventaire — mis à jour le 2026-11-14 (Phase 5.1)
 
 ## Serveur
 | Élément | Valeur |
@@ -29,6 +29,7 @@
 | Port | Service |
 |---|---|
 | 5432 | PostgreSQL (administration via tunnel SSH) |
+| 8085 | clients-ws (SOAP, sans authentification : local uniquement) |
 
 ## Services système
 | Service | Rôle | Config versionnée |
@@ -46,6 +47,7 @@
 | proxy | caddy | caddy:2.11.7-alpine | caddy_data (certificats), caddy_config | 0.0.0.0:80, 443/tcp, 443/udp |
 | demo | web | nginxinc/nginx-unprivileged:stable-alpine | aucun | via Caddy (alias demo-web sur le réseau proxy) |
 | postgres | postgres | postgres:18.6-trixie | postgres_data | 127.0.0.1:5432 ; réseau db (alias postgres) |
+| clients | app | clients-ws:local (construite sur le VPS ; Spring Boot 4.1.1, Java 21) | aucun | 127.0.0.1:8085 ; réseau db ; limite 768 Mo / 1 CPU |
 
 ## Réseaux Docker
 | Réseau | Rôle |
@@ -64,6 +66,7 @@
 |---|---|
 | /srv/infra | clone lecture seule de kouskefil/contabo-infra |
 | /srv/stacks | lien → /srv/infra/stacks |
+| /srv/apps/clients-ws | clone lecture seule de kouskefil/clients-ws (source du build) |
 | /srv/stacks/*/.env, /srv/stacks/*/secrets/ | secrets, hors Git, chmod 600 |
 | /srv/backups/postgres | sauvegardes PostgreSQL (7 conservées), chmod 700 |
 
@@ -87,7 +90,9 @@
 | Base | Propriétaire | Secret | Sauvegarde |
 |---|---|---|---|
 | demo | demo | /srv/stacks/demo/secrets/db_password | nocturne, restauration testée le 2026-11-11 |
+| clients | clients | /srv/stacks/clients/secrets/db_password | nocturne (détection automatique) |
 
 ## Points ouverts
+- clients-ws : pas d'authentification (WS-Security en 5.2) ni de tests automatisés (5.3) ; non exposé sur Internet.
 - ⚠️ Sauvegardes uniquement sur le VPS : envoi chiffré hors VPS (restic) à mettre en place, destination à choisir.
 - Mot de passe superutilisateur PostgreSQL à ranger dans le gestionnaire de mots de passe.

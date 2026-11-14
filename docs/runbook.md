@@ -111,3 +111,18 @@ Variables : `LATEST=$(ls -1d /srv/backups/postgres/20* | tail -1)`, depuis /srv/
   → recrée la base avec son propriétaire et ses droits.
 - **Serveur neuf** : restaurer d'abord les rôles (`docker compose exec -T postgres psql -U postgres < "$LATEST/globals.sql"`), puis chaque base avec `pg_restore -C`.
 - Vérifier : comparer `SELECT count(*)` et les droits (`SELECT datacl FROM pg_database WHERE datname='<app>'`).
+
+## Application clients-ws (SOAP) — /srv/stacks/clients, code dans /srv/apps/clients-ws
+- État : `cd /srv/stacks/clients && docker compose ps` ; logs : `docker compose logs -f --tail=100 app`
+- WSDL : `curl -s http://127.0.0.1:8085/ws/clients.wsdl` ; endpoint : POST http://127.0.0.1:8085/ws
+- Appels de test : `/srv/apps/clients-ws/samples/call.sh /srv/apps/clients-ws/samples/<requete>.xml`
+- Depuis le Mac (SoapUI) : `ssh -N -L 8085:127.0.0.1:8085 contabo-vps`, puis importer http://localhost:8085/ws/clients.wsdl
+- Mettre à jour le code : `git -C /srv/apps/clients-ws pull`, puis `cd /srv/stacks/clients && docker compose build && docker compose up -d`
+- Santé détaillée : `docker inspect clients-app-1 --format '{{json .State.Health}}' | jq '.Log[-1]'`
+- Un SOAP Fault renvoie toujours HTTP 500 (SOAP 1.1) : lire le `faultcode` (Client = requête en cause, Server = service en cause).
+- `.env` de la stack : APP_UID / APP_GID = `id -u` / `id -g` de kouskefil (lecture du secret).
+
+## Nouvelle application construite sur le VPS
+1. Dépôt de l'application sur GitHub ; sur le VPS : deploy key dédiée (`~/.ssh/github_<app>_deploy`), alias SSH `github-<app>`, clone dans /srv/apps/<app> avec `pull.ff only`.
+2. Base : `create-app-db.sh <app>` (voir « Nouvelle application avec base de données »).
+3. Stack dans contabo-infra : `build.context: /srv/apps/<app>`, secret `db_password`, réseau `db`, `user: ${APP_UID}:${APP_GID}`.
