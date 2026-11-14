@@ -1,0 +1,59 @@
+# clients-ws — service SOAP (Phase 5.1)
+# Image construite sur le VPS depuis /srv/apps/clients-ws (dépôt de l'application).
+name: clients
+
+services:
+  app:
+    build:
+      context: /srv/apps/clients-ws
+    image: clients-ws:local
+    restart: unless-stopped
+    init: true
+    # Même UID que le propriétaire du fichier secret sur l'hôte (voir .env), jamais root
+    user: "${APP_UID:?définir APP_UID dans .env}:${APP_GID:?définir APP_GID dans .env}"
+    # Local uniquement tant que le service n'a pas d'authentification (WS-Security en 5.2)
+    ports:
+      - "127.0.0.1:8085:8080"
+    environment:
+      DB_HOST: postgres
+      DB_NAME: clients
+      DB_USER: clients
+      APP_WS_LOCATION_URI: http://localhost:8085/ws
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError"
+      TZ: Europe/Paris
+    secrets:
+      - db_password
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 768M
+          pids: 300
+    healthcheck:
+      # Pas de curl dans l'image : requête HTTP minimale avec bash sur le port d'administration
+      test:
+        - CMD
+        - bash
+        - -c
+        - "exec 3<>/dev/tcp/127.0.0.1/8081 && printf 'GET /actuator/health/readiness HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q '\"status\":\"UP\"' <&3"
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 90s
+    stop_grace_period: 30s
+    networks:
+      - db
+
+secrets:
+  db_password:
+    file: ./secrets/db_password   # créé par postgres/scripts/create-app-db.sh clients
+
+networks:
+  db:
+    external: true
