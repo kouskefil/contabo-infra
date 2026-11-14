@@ -1,4 +1,4 @@
-# clients-ws — service SOAP (Phase 5.1)
+# clients-ws — service SOAP (Phase 5.1, WS-Security et exposition en 5.2)
 # Image construite sur le VPS depuis /srv/apps/clients-ws (dépôt de l'application).
 name: clients
 
@@ -11,18 +11,20 @@ services:
     init: true
     # Même UID que le propriétaire du fichier secret sur l'hôte (voir .env), jamais root
     user: "${APP_UID:?définir APP_UID dans .env}:${APP_GID:?définir APP_GID dans .env}"
-    # Local uniquement tant que le service n'a pas d'authentification (WS-Security en 5.2)
+    # Accès local pour les tests ; l'accès public passe par Caddy (réseau proxy)
     ports:
       - "127.0.0.1:8085:8080"
     environment:
       DB_HOST: postgres
       DB_NAME: clients
       DB_USER: clients
-      APP_WS_LOCATION_URI: http://localhost:8085/ws
+      APP_WS_LOCATION_URI: https://api.kouskefil.tech/ws
+      WS_USERNAME: partenaire
       JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError"
       TZ: Europe/Paris
     secrets:
       - db_password
+      - ws_password
     read_only: true
     tmpfs:
       - /tmp
@@ -48,12 +50,18 @@ services:
       start_period: 90s
     stop_grace_period: 30s
     networks:
-      - db
+      db:
+      proxy:
+        aliases: [clients-app]    # nom utilisé par Caddy
 
 secrets:
   db_password:
     file: ./secrets/db_password   # créé par postgres/scripts/create-app-db.sh clients
+  ws_password:
+    file: ./secrets/ws_password   # mot de passe WS-Security du compte "partenaire"
 
 networks:
   db:
+    external: true
+  proxy:
     external: true
