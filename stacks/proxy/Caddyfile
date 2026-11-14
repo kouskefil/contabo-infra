@@ -21,3 +21,19 @@ demo.kouskefil.tech {
 	encode zstd gzip
 	reverse_proxy demo-web:8080
 }
+
+api.kouskefil.tech {
+	import security_headers
+	encode zstd gzip
+
+	@soap path /ws /ws/*
+	handle @soap {
+		request_body {
+			max_size 1MB
+		}
+		reverse_proxy clients-app:8080
+	}
+	handle {
+		respond 404
+	}
+}
