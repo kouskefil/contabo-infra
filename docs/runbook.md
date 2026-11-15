@@ -62,7 +62,8 @@
 ## Reverse proxy Caddy (/srv/stacks/proxy)
 - État : `cd /srv/stacks/proxy && docker compose ps` ; version : `docker compose exec caddy caddy version`
 - Logs : `docker compose logs -f --tail=100 caddy` ; certificats : `docker compose logs caddy | grep -iE 'certificate|error'`
-- Recharger le Caddyfile sans coupure (après git pull) : `docker compose exec -w /etc/caddy caddy caddy reload`
+- Appliquer un Caddyfile modifié (après git pull) : `docker compose restart caddy` (coupure d'une à deux secondes), puis vérifier que le conteneur voit la nouvelle version : `docker compose exec caddy grep -c '<nom>.kouskefil.tech' /etc/caddy/Caddyfile`.
+- ⚠️ `caddy reload` seul ne suffit pas après un `git pull` : le Caddyfile est monté comme fichier unique, git le remplace par un nouveau fichier, et le conteneur continue de voir l'ancien jusqu'à son redémarrage.
 - Valider avant rechargement : `docker compose exec -w /etc/caddy caddy caddy validate`
 - Changer de version : `docker pull caddy:<version>-alpine` pour vérifier le tag, modifier l'image dans compose.yaml (commit), puis `docker compose up -d`.
 - ⚠️ Ne jamais `docker compose down -v` sur cette stack : le volume caddy_data contient certificats et compte ACME (limites Let's Encrypt).
@@ -73,7 +74,7 @@
 1. DNS OVH : enregistrement A `<nom>` → 75.119.129.90 ; vérifier avec dig.
 2. Stack de l'application : aucun `ports:` ; réseau `proxy` (external) avec alias unique `<stack>-<service>`.
 3. Caddyfile : bloc `<nom>.kouskefil.tech { import security_headers ; encode zstd gzip ; reverse_proxy <alias>:<port> }`.
-4. Commit/push, `git pull` sur le serveur, `docker compose up -d` de l'application, puis `caddy reload`.
+4. Commit/push, `git pull` sur le serveur, `docker compose up -d` de l'application, puis `docker compose restart caddy` dans /srv/stacks/proxy.
 5. Vérifier : `curl -sI https://<nom>.kouskefil.tech`.
 - 502 Bad Gateway : `docker network inspect proxy --format '{{range .Containers}}{{.Name}} {{end}}'`
 
@@ -114,9 +115,12 @@ Variables : `LATEST=$(ls -1d /srv/backups/postgres/20* | tail -1)`, depuis /srv/
 
 ## Application clients-ws (SOAP) — /srv/stacks/clients, code dans /srv/apps/clients-ws
 - État : `cd /srv/stacks/clients && docker compose ps` ; logs : `docker compose logs -f --tail=100 app`
-- WSDL : `curl -s http://127.0.0.1:8085/ws/clients.wsdl` ; endpoint : POST http://127.0.0.1:8085/ws
-- Appels de test : `/srv/apps/clients-ws/samples/call.sh /srv/apps/clients-ws/samples/<requete>.xml`
-- Depuis le Mac (SoapUI) : `ssh -N -L 8085:127.0.0.1:8085 contabo-vps`, puis importer http://localhost:8085/ws/clients.wsdl
+- Public : https://api.kouskefil.tech/ws (WSDL : /ws/clients.wsdl) ; local : http://127.0.0.1:8085/ws
+- Authentification : WS-Security UsernameToken, compte `partenaire`, mot de passe dans /srv/stacks/clients/secrets/ws_password.
+- Appels de test (sur le VPS, où se trouve le secret) : `cd /srv/apps/clients-ws && samples/call.py samples/<requete>.xml` ; options `--url https://api.kouskefil.tech/ws`, `--no-auth`, `--wrong-password`, `--replay`, `--show-request`.
+- Changer le mot de passe WS-Security : réécrire secrets/ws_password (sans retour à la ligne), puis `docker compose up -d --force-recreate`.
+- Fault « A replay attack has been detected » : message déjà reçu (comportement voulu) ; « The security token could not be authenticated » : identifiant ou mot de passe faux, ou horloge du client décalée de plus de 5 minutes.
+- Depuis le Mac (SoapUI) : importer https://api.kouskefil.tech/ws/clients.wsdl, puis ajouter un WS-Security UsernameToken (PasswordDigest) avec le compte `partenaire`.
 - Mettre à jour le code : `git -C /srv/apps/clients-ws pull`, puis `cd /srv/stacks/clients && docker compose build && docker compose up -d`
 - Santé détaillée : `docker inspect clients-app-1 --format '{{json .State.Health}}' | jq '.Log[-1]'`
 - Un SOAP Fault renvoie toujours HTTP 500 (SOAP 1.1) : lire le `faultcode` (Client = requête en cause, Server = service en cause).

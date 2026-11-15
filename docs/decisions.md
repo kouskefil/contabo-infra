@@ -108,4 +108,16 @@
 - Dépôt séparé `kouskefil/clients-ws` (code) ; la stack Compose reste dans contabo-infra (stacks/clients). Image construite sur le VPS depuis /srv/apps/clients-ws (deploy key en lecture seule, alias `github-clients-ws`), en attendant la CI de la Phase 7.
 - Secret de base lu par Spring via configtree (/run/secrets/db_password) ; conteneur exécuté avec l'UID de kouskefil pour pouvoir lire le fichier secret (les secrets Compose de type fichier gardent les droits de l'hôte).
 - Actuator sur un port d'administration séparé (8081), jamais exposé.
-- Exposition : 127.0.0.1:8085 uniquement tant que le service n'a pas d'authentification ; exposition publique après WS-Security (5.2).
+- Exposition : 127.0.0.1:8085 uniquement tant que le service n'avait pas d'authentification ; exposé publiquement le 2026-11-15 après WS-Security (voir plus bas).
+
+## 2026-11-15 — WS-Security et exposition publique de clients-ws
+- Décision : authentification WS-Security UsernameToken (PasswordDigest : nonce + horodatage + mot de passe), validée par Wss4jSecurityInterceptor (Spring-WS 5.0.2, WSS4J 4.0.1). Compte `partenaire`, mot de passe dans /srv/stacks/clients/secrets/ws_password (secret Compose, lu via configtree).
+- Ordre des intercepteurs : sécurité avant validation XSD (un appelant non authentifié n'apprend rien sur sa requête). Vérifié.
+- Anti-rejeu : MemoryReplayCache (WSS4J) branché par setValidationReplayCache. Constat : sans cache, un même message était accepté deux fois. Limites assumées : cache vidé au redémarrage (couvert par la fenêtre de 5 minutes de l'horodatage) et propre à une instance (SpringReplayCache partagé à prévoir si plusieurs instances).
+- Exposition : https://api.kouskefil.tech/ws via Caddy. Seul /ws est transmis (corps limité à 1 Mo) ; Actuator et le reste répondent 404. Le WSDL reste lisible sans authentification (contrat public).
+- Alternatives écartées : exposer sans authentification ; authentification HTTP Basic au niveau de Caddy (ne voyage pas avec le message SOAP).
+
+## 2026-11-15 — Périmètre : la formation SOAP sort de ce projet
+- Décision : ce projet reste centré sur l'infrastructure. L'apprentissage de SOAP (XSD, WSDL, Faults, WS-Security, tests, client, MTOM, versionnement) se fera dans un projet Claude séparé, à partir d'un dossier de passation construit sur clients-ws.
+- Suite de la Phase 5 : application FastAPI, test de reboot, puis document complet du processus de déploiement d'une application.
+- Méthode : étapes plus petites, concept expliqué avant la commande.

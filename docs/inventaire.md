@@ -1,4 +1,4 @@
-# Inventaire — mis à jour le 2026-11-14 (Phase 5.1)
+# Inventaire — mis à jour le 2026-11-15 (Phase 5.2)
 
 ## Serveur
 | Élément | Valeur |
@@ -29,7 +29,7 @@
 | Port | Service |
 |---|---|
 | 5432 | PostgreSQL (administration via tunnel SSH) |
-| 8085 | clients-ws (SOAP, sans authentification : local uniquement) |
+| 8085 | clients-ws (SOAP, accès local pour les tests ; WS-Security requis) |
 
 ## Services système
 | Service | Rôle | Config versionnée |
@@ -47,7 +47,7 @@
 | proxy | caddy | caddy:2.11.7-alpine | caddy_data (certificats), caddy_config | 0.0.0.0:80, 443/tcp, 443/udp |
 | demo | web | nginxinc/nginx-unprivileged:stable-alpine | aucun | via Caddy (alias demo-web sur le réseau proxy) |
 | postgres | postgres | postgres:18.6-trixie | postgres_data | 127.0.0.1:5432 ; réseau db (alias postgres) |
-| clients | app | clients-ws:local (construite sur le VPS ; Spring Boot 4.1.1, Java 21) | aucun | 127.0.0.1:8085 ; réseau db ; limite 768 Mo / 1 CPU |
+| clients | app | clients-ws:local (construite sur le VPS ; Spring Boot 4.1.1, Java 21) | aucun | via Caddy (alias clients-app sur le réseau proxy) ; 127.0.0.1:8085 ; réseau db ; limite 768 Mo / 1 CPU |
 
 ## Réseaux Docker
 | Réseau | Rôle |
@@ -60,6 +60,7 @@
 | Domaine | Service | Certificat | Contrôles |
 |---|---|---|---|
 | demo.kouskefil.tech | demo-web:8080 | Let's Encrypt (YE2), renouvellement auto par Caddy | SSL Labs A+, Security Headers A |
+| api.kouskefil.tech | clients-app:8080, chemin /ws uniquement (reste : 404) | Let's Encrypt, renouvellement auto par Caddy | WS-Security UsernameToken + anti-rejeu ; Actuator non exposé (404) |
 
 ## Arborescence serveur
 | Chemin | Rôle |
@@ -82,9 +83,16 @@
 |---|---|---|
 | @ (A), www (A) | 75.119.129.90 | non servis pour l'instant |
 | demo (A) | 75.119.129.90 | servi par Caddy |
-| api (A) | 75.119.129.90 | réservé, non servi |
+| api (A) | 75.119.129.90 | servi par Caddy (clients-ws, /ws) |
 | @ CAA | 0 issue "letsencrypt.org" | actif |
 | @ MX, SPF, DKIM (ovhmo-selector-1/2) | messagerie OVH | ne pas modifier |
+
+## Secrets applicatifs (hors Git)
+| Fichier | Rôle |
+|---|---|
+| /srv/stacks/postgres/secrets/postgres_password | superutilisateur PostgreSQL |
+| /srv/stacks/<app>/secrets/db_password | mot de passe du rôle de l'application |
+| /srv/stacks/clients/secrets/ws_password | WS-Security, compte `partenaire` |
 
 ## Bases PostgreSQL
 | Base | Propriétaire | Secret | Sauvegarde |
@@ -93,6 +101,9 @@
 | clients | clients | /srv/stacks/clients/secrets/db_password | nocturne (détection automatique) |
 
 ## Points ouverts
-- clients-ws : pas d'authentification (WS-Security en 5.2) ni de tests automatisés (5.3) ; non exposé sur Internet.
+- clients-ws : pas de tests automatisés (à traiter dans le projet de formation SOAP) ; cache anti-rejeu en mémoire (une seule instance).
+- Mot de passe WS-Security (secrets/ws_password) à ranger dans le gestionnaire de mots de passe.
+- Caddyfile monté comme fichier unique : redémarrage de Caddy nécessaire après chaque modification (montage par dossier à prévoir).
+- À livrer en fin de Phase 5 : document complet du processus de déploiement ; dossier de passation pour le projet de formation SOAP.
 - ⚠️ Sauvegardes uniquement sur le VPS : envoi chiffré hors VPS (restic) à mettre en place, destination à choisir.
 - Mot de passe superutilisateur PostgreSQL à ranger dans le gestionnaire de mots de passe.
