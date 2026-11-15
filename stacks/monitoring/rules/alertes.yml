@@ -1,0 +1,72 @@
+# Règles d'alerte — Phase 6.5
+# "expr"  : la condition, en PromQL
+# "for"   : combien de temps elle doit rester vraie avant d'alerter (évite les faux positifs)
+
+groups:
+  - name: machine
+    rules:
+      - alert: CibleInjoignable
+        expr: up == 0
+        for: 5m
+        labels: { severite: critique }
+        annotations:
+          resume: "{{ $labels.job }} ne répond plus"
+          detail: "Prometheus n'arrive plus à interroger {{ $labels.instance }} depuis 5 minutes."
+
+      - alert: DisqueBientotPlein
+        expr: 100 - (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"} / node_filesystem_size_bytes * 100) > 85
+        for: 15m
+        labels: { severite: avertissement }
+        annotations:
+          resume: "Disque {{ $labels.mountpoint }} rempli à {{ $value | printf \"%.0f\" }} %"
+          detail: "Seuil d'alerte : 85 %. Vérifier les logs Docker et /srv/backups."
+
+      - alert: DisqueSatureDans24h
+        expr: predict_linear(node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"}[6h], 24 * 3600) < 0
+        for: 1h
+        labels: { severite: critique }
+        annotations:
+          resume: "Disque {{ $labels.mountpoint }} saturé d'ici 24 h"
+          detail: "À ce rythme de remplissage, l'espace sera épuisé en moins d'une journée."
+
+      - alert: MemoireFaible
+        expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes * 100 < 10
+        for: 15m
+        labels: { severite: critique }
+        annotations:
+          resume: "Mémoire disponible sous 10 %"
+          detail: "Il reste {{ $value | printf \"%.1f\" }} % de mémoire. Risque d'arrêt brutal d'un service."
+
+      - alert: SwapImportant
+        expr: (node_memory_SwapTotal_bytes - node_memory_SwapFree_bytes) / node_memory_SwapTotal_bytes * 100 > 50
+        for: 30m
+        labels: { severite: avertissement }
+        annotations:
+          resume: "Swap utilisé à {{ $value | printf \"%.0f\" }} %"
+          detail: "Le swap n'est qu'un amortisseur : une utilisation durable signale un manque de mémoire."
+
+      - alert: ChargeCpuElevee
+        expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+        for: 15m
+        labels: { severite: avertissement }
+        annotations:
+          resume: "Processeur à {{ $value | printf \"%.0f\" }} % depuis 15 minutes"
+          detail: "Identifier le conteneur responsable dans Grafana."
+
+  - name: conteneurs
+    rules:
+      - alert: ConteneurEnBoucle
+        expr: changes(container_start_time_seconds{name!=""}[30m]) > 2
+        for: 5m
+        labels: { severite: critique }
+        annotations:
+          resume: "{{ $labels.name }} redémarre en boucle"
+          detail: "Plus de 2 redémarrages en 30 minutes. Voir : docker logs {{ $labels.name }}"
+
+      - alert: ConteneurProcheDeSaLimite
+        expr: container_memory_usage_bytes{name!=""} / (container_spec_memory_limit_bytes{name!=""} > 0) * 100 > 90
+        for: 15m
+        labels: { severite: avertissement }
+        annotations:
+          resume: "{{ $labels.name }} à {{ $value | printf \"%.0f\" }} % de sa limite mémoire"
+          detail: "Au-delà de 100 %, Docker arrête le conteneur (OOM). Augmenter la limite ou corriger la fuite."

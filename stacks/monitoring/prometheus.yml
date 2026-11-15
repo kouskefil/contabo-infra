@@ -8,6 +8,16 @@ global:
   external_labels:
     serveur: contabo-vps
 
+# Où envoyer les alertes déclenchées
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+
+# Les règles qui définissent ce qui est un problème
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
 scrape_configs:
   # 1. Prometheus se surveille lui-même
   - job_name: prometheus
@@ -36,3 +46,7 @@ scrape_configs:
   - job_name: grafana
     static_configs:
       - targets: ['grafana:3000']
+
+  - job_name: alertmanager
+    static_configs:
+      - targets: ['alertmanager:9093']

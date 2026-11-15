@@ -1,0 +1,27 @@
+# Alertmanager — Phase 6.5
+# Prometheus détecte les problèmes ; Alertmanager décide QUAND et COMMENT prévenir :
+# il regroupe les alertes liées, évite le harcèlement, et notifie le retour à la normale.
+
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: telegram
+  group_by: [alertname]
+  group_wait: 30s        # attendre 30 s avant la 1re notification (regrouper les alertes simultanées)
+  group_interval: 5m     # délai avant de signaler une NOUVELLE alerte du même groupe
+  repeat_interval: 12h   # ne pas répéter la même alerte avant 12 h
+
+receivers:
+  - name: telegram
+    telegram_configs:
+      - bot_token_file: /run/secrets/telegram_token
+        chat_id: 8313007849
+        parse_mode: HTML
+        send_resolved: true          # prévenir aussi quand c'est réglé
+        message: |
+          {{ if eq .Status "firing" }}🔴 PROBLÈME{{ else }}✅ RÉSOLU{{ end }} — {{ .CommonLabels.alertname }}
+          {{ range .Alerts }}
+          <b>{{ .Annotations.resume }}</b>
+          {{ .Annotations.detail }}
+          {{ end }}
