@@ -1,0 +1,98 @@
+# Observabilité — Phase 6.2 : collecte des mesures
+# Prometheus n'est accessible qu'en local (tunnel SSH). Rien n'est exposé sur Internet.
+name: monitoring
+
+services:
+  prometheus:
+    image: prom/prometheus:v3.13.5        # version LTS
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9090:9090"
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d   # on garde 30 jours d'historique
+      - --storage.tsdb.retention.size=4GB   # garde-fou : jamais plus de 4 Go sur le disque
+      - --web.listen-address=0.0.0.0:9090
+      - --web.enable-lifecycle                # permet de recharger la config sans redémarrer
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+          pids: 200
+    healthcheck:
+      test: ["CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1:9090/-/healthy"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    stop_grace_period: 30s
+    networks: [monitoring]
+
+  # Lit les compteurs du noyau Linux et les publie au format Prometheus.
+  node-exporter:
+    image: prom/node-exporter:v1.12.0
+    restart: unless-stopped
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/host/root
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
+    pid: host
+    volumes:                                 # lecture seule : il observe, il ne touche à rien
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/host/root:ro,rslave
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
+          pids: 100
+    networks: [monitoring]
+
+  # Mesure la consommation de chaque conteneur Docker.
+  # ⚠️ Nécessite un accès large en lecture à l'hôte : voir la note dans le message.
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.52.1
+    restart: unless-stopped
+    privileged: true
+    devices:
+      - /dev/kmsg
+    command:
+      - --docker_only=true                   # ignore les processus hors conteneurs
+      - --housekeeping_interval=30s
+      - --store_container_labels=false
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 384M
+          pids: 200
+    networks: [monitoring]
+
+volumes:
+  prometheus_data:
+
+networks:
+  monitoring:

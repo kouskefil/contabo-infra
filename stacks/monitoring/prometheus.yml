@@ -1,0 +1,25 @@
+# Prometheus — Phase 6.2
+# Prometheus VA CHERCHER les mesures (il "scrape") : chaque cible expose une page
+# texte, Prometheus la lit toutes les 30 s et conserve l'historique.
+
+global:
+  scrape_interval: 30s        # fréquence de relevé
+  scrape_timeout: 10s
+  external_labels:
+    serveur: contabo-vps
+
+scrape_configs:
+  # 1. Prometheus se surveille lui-même
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # 2. La machine : processeur, mémoire, disque, charge, réseau
+  - job_name: node
+    static_configs:
+      - targets: ['node-exporter:9100']
+
+  # 3. Les conteneurs : mémoire et CPU par conteneur
+  - job_name: cadvisor
+    static_configs:
+      - targets: ['cadvisor:8080']
