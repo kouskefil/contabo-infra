@@ -167,6 +167,10 @@ services:
   alloy:
     image: grafana/alloy:v1.20.0
     restart: unless-stopped
+    # Root : nécessaire pour lire le socket Docker (root:docker) et écrire son
+    # dossier d'état. Lire ce socket donne de toute façon un pouvoir équivalent
+    # à root : le niveau de confiance est inchangé. cap_drop ALL reste en place.
+    user: "0:0"
     depends_on:
       loki:
         condition: service_started
