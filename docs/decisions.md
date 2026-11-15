@@ -136,3 +136,55 @@
 ## 2026-11-15 — Procédure de déploiement documentée
 - Décision : docs/deploiement-application.md décrit la procédure complète (deux dépôts, deploy key, base, secrets, build, tests, exposition, mise à jour, retour arrière, pièges). À réviser en Phase 7 quand GitLab CI remplacera le build sur le VPS.
 - docs/passation-formation-soap.md : dossier de contexte pour le projet séparé de formation SOAP.
+
+## 2026-11-15 — Phase 6 : observabilité auto-hébergée plutôt que Datadog
+- Décision : stack auto-hébergée sur le VPS — Prometheus (métriques), Grafana (tableaux de bord), Loki (logs), Grafana Alloy (collecte des logs), Alertmanager (notifications), node-exporter (machine), cAdvisor (conteneurs), blackbox exporter (sondes HTTP).
+- Alternative écartée : Datadog (facturation par hôte et par conteneur difficile à prévoir, données d'exploitation hébergées chez un tiers).
+- Raison : les ressources sont disponibles (23 Go de RAM, 1,1 Go utilisés avant la phase) ; la compétence est transférable, Prometheus étant le standard de l'écosystème Kubernetes visé en Phase 8 ; aucune donnée ne sort du serveur.
+- Contrepartie assumée : une stack de plus à maintenir et à mettre à jour, et qui ne peut rien signaler si le serveur lui-même s'arrête.
+- Rétention : métriques 30 jours ou 4 Go ; logs 14 jours.
+
+## 2026-11-15 — Grafana et Prometheus accessibles par tunnel SSH uniquement
+- Décision : publiés sur 127.0.0.1 seulement (3000 et 9090). Pas de nom de domaine, pas de passage par Caddy.
+- Alternative écartée : exposer grafana.kouskefil.tech derrière Caddy avec authentification.
+- Raison : une interface d'administration exposée en permanence sur Internet est une surface d'attaque pour un bénéfice faible, l'usage étant personnel et depuis un seul poste. L'authentification de Grafana devient une deuxième ligne de défense au lieu d'être la seule.
+- Réglages associés : accès anonyme désactivé, inscription désactivée, mot de passe admin en secret Compose (GF_SECURITY_ADMIN_PASSWORD__FILE).
+
+## 2026-11-15 — Alertes par Telegram
+- Décision : Alertmanager notifie un bot Telegram (« Alerte contabo »), jeton en secret Compose (bot_token_file), `send_resolved: true`.
+- Alternatives écartées : e-mail (nécessite un relais SMTP fiable, risque de classement en indésirable, pas de notification immédiate sur le téléphone) ; Discord.
+- Réglages : group_by alertname, group_wait 30 s, group_interval 5 min, repeat_interval 12 h.
+- Validé de bout en bout le 2026-11-15 : arrêt volontaire de cAdvisor, puis arrêt de la stack demo (message « PROBLÈME » à 22:39, « RÉSOLU » à 22:44).
+- Piège rencontré : un bot Telegram ne peut écrire à quelqu'un qu'après que celui-ci a ouvert la conversation et appuyé sur START. Être sur la fiche du bot ne suffit pas — il faut entrer dans la conversation.
+
+## 2026-11-15 — Grafana Alloy à la place de Promtail
+- Décision : collecte des logs de conteneurs par Grafana Alloy (discovery.docker → discovery.relabel → loki.source.docker → loki.write).
+- Raison : Promtail est en fin de vie depuis le 2 mars 2026 ; Alloy est son successeur désigné.
+- Étiquettes conservées : `conteneur`, `stack`, `service` (issues des labels Compose). Loki n'indexe que les étiquettes : en multiplier dégrade les performances, le reste se filtre à la requête.
+- Contrepartie assumée : Alloy a accès au socket Docker en lecture — c'est un composant privilégié, comme cAdvisor qui tourne en mode `privileged`. Deux conteneurs ont donc un accès de niveau hôte.
+
+## 2026-11-15 — Trois constats de dépannage à retenir
+- **Loki** : l'image ne contient ni `wget` ni `curl`, un healthcheck Docker classique y est donc impossible (conteneur marqué `unhealthy` à tort, et toute la stack bloquée par `depends_on`). Décision : pas de healthcheck sur Loki ; c'est Prometheus qui le surveille, via des jobs dédiés (loki, alloy, grafana, alertmanager, blackbox).
+- **Alloy** : avec `cap_drop: [ALL]`, même root est soumis aux contrôles de droits classiques, car `CAP_DAC_OVERRIDE` est retiré. Docker ayant recopié les droits de l'image (`drwxrwx--- alloy alloy`) dans le volume neuf, le conteneur ne pouvait pas y écrire. Décision : `cap_add: [DAC_OVERRIDE]`. Diagnostic obtenu avec `docker run --rm --entrypoint sh <image> -c 'id; ls -ld <chemin>'` — après deux correctifs tentés au jugé, qui n'ont rien donné.
+- **Versions d'images** : un tag annoncé par un site de suivi de versions n'existe pas forcément sur le Docker Hub (cas de grafana-oss 13.3.1). Règle adoptée : vérifier avec `docker manifest inspect <image>:<tag>` avant d'épingler, et ne jamais utiliser de tag flottant (`latest`, `v0`, `master`).
+
+## 2026-11-15 — Surveillance des sauvegardes
+- Décision : `backup.sh` écrit cinq mesures dans /srv/metrics/pg_backup.prom, lues par node-exporter via le collecteur « textfile ».
+- Mécanisme : écriture atomique (fichier temporaire puis `mv`) pour que node-exporter ne lise jamais un fichier à moitié écrit ; `trap 'ecrire_metriques 0' EXIT` enregistre un échec dès le démarrage du script, annulé seulement à la dernière ligne — un script interrompu, tué ou planté laisse donc une trace d'échec.
+- Trois règles : échec de la dernière exécution, sauvegarde datant de plus de 36 h, absence de la métrique depuis 2 h.
+- La troisième est la plus importante : sans elle, la disparition du fichier rendrait les deux autres muettes, et un silence ressemble à tort à une bonne nouvelle.
+
+## 2026-11-15 — Sondes HTTP (blackbox exporter)
+- Décision : blackbox exporter v0.29.1, trois sondes lancées depuis le VPS — demo.kouskefil.tech (2xx attendu), api.kouskefil.tech/ws/clients.wsdl (2xx), api.kouskefil.tech/taches (**401 attendu**).
+- Raison : rien ne vérifiait jusque-là ce qu'un visiteur obtient réellement. Un conteneur peut être `healthy` et servir des erreurs ; la surveillance en boîte noire teste le résultat visible.
+- La sonde /taches vérifie deux choses à la fois : le service répond, et son authentification est toujours en place. Un passage à 200 serait signalé.
+- Trois règles : sonde en échec (5 min), certificat TLS à moins de 21 jours (Caddy renouvelant à 30 jours, un déclenchement signale trois semaines d'échecs de renouvellement), réponse de plus de 5 s pendant 15 min.
+- Alternative écartée : une règle « ce conteneur a disparu » — elle exigerait d'inscrire les noms de conteneurs en dur et casserait silencieusement au premier renommage de stack. Les sondes couvrent la disparition comme le blocage ou l'erreur.
+- Un job supplémentaire surveille le blackbox exporter lui-même : sans lui, ses trois sondes deviendraient muettes sans un mot.
+
+## 2026-11-15 — Sonde externe : point ouvert
+- Besoin : si le VPS s'arrête, Prometheus et Alertmanager s'arrêtent avec lui et aucune alerte ne part. Un outil ne peut pas signaler sa propre mort.
+- Tentative : UptimeRobot (offre gratuite, 50 sondes, intervalle de 5 minutes, usage commercial autorisé contrairement à ce qu'indiquaient des comparatifs tiers). Aucune alerte reçue lors du test ; diagnostic non terminé.
+- À vérifier à la reprise : sondes actives et non en pause, contact d'alerte vérifié (lien de confirmation cliqué), contact rattaché à chaque sonde. L'API v2 (`getMonitors`, `getAlertContacts`) permet de le contrôler en ligne de commande avec une clé en lecture seule.
+- Attention : Telegram ne figure pas dans les canaux de notification de l'offre gratuite d'UptimeRobot — utiliser l'e-mail.
+- Leçon méthodologique : un test de panne doit durer **au moins deux fois l'intervalle de contrôle**. « Arrêter une minute » ne prouve rien face à un contrôle toutes les 5 minutes, d'autant qu'UptimeRobot revérifie depuis plusieurs nœuds avant d'ouvrir un incident. Vaut aussi pour les règles Prometheus : une alerte en `for: 15m` ne se déclenchera jamais si la condition ne dure pas un quart d'heure.
