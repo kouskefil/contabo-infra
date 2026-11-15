@@ -1,0 +1,49 @@
+// Alloy — Phase 6.4
+// Alloy remplace Promtail, qui n'est plus maintenu depuis mars 2026.
+// Il demande à Docker la liste des conteneurs, lit leurs logs, et les pousse vers Loki.
+
+logging {
+  level  = "warn"
+  format = "logfmt"
+}
+
+// 1. Découvrir les conteneurs qui tournent
+discovery.docker "conteneurs" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "30s"
+}
+
+// 2. Transformer les informations Docker en étiquettes lisibles
+discovery.relabel "conteneurs" {
+  targets = discovery.docker.conteneurs.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"                       // Docker préfixe les noms d'un "/"
+    target_label  = "conteneur"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    target_label  = "stack"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+}
+
+// 3. Lire les logs et les transmettre
+loki.source.docker "conteneurs" {
+  host             = "unix:///var/run/docker.sock"
+  targets          = discovery.relabel.conteneurs.output
+  labels           = { job = "docker" }
+  refresh_interval = "30s"
+  forward_to       = [loki.write.local.receiver]
+}
+
+// 4. Envoyer à Loki
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

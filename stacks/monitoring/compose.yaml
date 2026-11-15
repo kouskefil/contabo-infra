@@ -1,4 +1,4 @@
-# Observabilité — Phases 6.2 (mesures) et 6.3 (tableaux de bord)
+# Observabilité — Phases 6.2 (mesures), 6.3 (tableaux de bord), 6.4 (logs)
 # Prometheus et Grafana ne sont accessibles qu'en local (tunnel SSH).
 # Rien n'est exposé sur Internet.
 name: monitoring
@@ -137,6 +137,64 @@ services:
     stop_grace_period: 20s
     networks: [monitoring]
 
+  # Stocke les logs. N'indexe que les étiquettes, pas le texte : très léger.
+  loki:
+    image: grafana/loki:3.7.8
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/config.yaml"]
+    volumes:
+      - ./loki/config.yaml:/etc/loki/config.yaml:ro
+      - loki_data:/loki
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+          pids: 200
+    healthcheck:
+      test: ["CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1:3100/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    stop_grace_period: 30s
+    networks: [monitoring]
+
+  # Collecte les logs de tous les conteneurs et les pousse vers Loki.
+  # ⚠️ Accède au socket Docker : voir la note dans le message.
+  alloy:
+    image: grafana/alloy:v1.20.0
+    restart: unless-stopped
+    depends_on:
+      loki:
+        condition: service_healthy
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    volumes:
+      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy_data:/var/lib/alloy/data
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
+          pids: 200
+    stop_grace_period: 20s
+    networks: [monitoring]
+
 secrets:
   grafana_admin_password:
     file: ./secrets/grafana_admin_password
@@ -144,6 +202,8 @@ secrets:
 volumes:
   prometheus_data:
   grafana_data:
+  loki_data:
+  alloy_data:
 
 networks:
   monitoring:

@@ -1,0 +1,54 @@
+# Loki — Phase 6.4
+# Loki est à Prometheus ce qu'un moteur de recherche est à un tableur :
+# il n'indexe PAS le texte des logs, seulement leurs étiquettes (conteneur, stack).
+# C'est ce qui le rend léger. La recherche dans le texte se fait au moment de la requête.
+
+auth_enabled: false            # un seul utilisateur : nous. Pas de multi-tenant.
+
+server:
+  http_listen_port: 3100
+  grpc_listen_port: 9096
+  log_level: warn              # sinon Loki journalise chaque requête
+
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /loki
+  replication_factor: 1        # une seule instance
+  ring:
+    kvstore:
+      store: inmemory
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+
+schema_config:
+  configs:
+    - from: 2026-11-01
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+limits_config:
+  retention_period: 14d        # on garde 14 jours de logs
+  reject_old_samples: true
+  reject_old_samples_max_age: 168h
+  allow_structured_metadata: true
+  volume_enabled: true
+
+compactor:
+  working_directory: /loki/compactor
+  delete_request_store: filesystem
+  retention_enabled: true      # sans cette ligne, retention_period est ignorée
+
+ruler:
+  storage:
+    type: local
+    local:
+      directory: /loki/rules
+
+analytics:
+  reporting_enabled: false
