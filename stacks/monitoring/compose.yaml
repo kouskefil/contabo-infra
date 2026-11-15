@@ -169,7 +169,7 @@ services:
     restart: unless-stopped
     # Root : nécessaire pour lire le socket Docker (root:docker) et écrire son
     # dossier d'état. Lire ce socket donne de toute façon un pouvoir équivalent
-    # à root : le niveau de confiance est inchangé. cap_drop ALL reste en place.
+    # à root : le niveau de confiance est inchangé.
     user: "0:0"
     depends_on:
       loki:
@@ -184,6 +184,10 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - alloy_data:/var/lib/alloy/data
     cap_drop: [ALL]
+    # /var/lib/alloy/data appartient à alloy:alloy en 770, y compris dans le volume
+    # (Docker recopie les droits de l'image). Sans DAC_OVERRIDE, même root se voit
+    # refuser l'accès : c'est la capacité qui permet d'ignorer les permissions.
+    cap_add: [DAC_OVERRIDE]
     security_opt:
       - no-new-privileges:true
     deploy:
