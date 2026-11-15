@@ -1,0 +1,63 @@
+# taches-api — API de référence FastAPI (Phase 5.3)
+# Image construite sur le VPS depuis /srv/apps/taches-api (dépôt de l'application).
+name: taches
+
+services:
+  app:
+    build:
+      context: /srv/apps/taches-api
+    image: taches-api:local
+    restart: unless-stopped
+    init: true
+    # Même UID que le propriétaire des fichiers secrets sur l'hôte (voir .env), jamais root
+    user: "${APP_UID:?définir APP_UID dans .env}:${APP_GID:?définir APP_GID dans .env}"
+    # Accès local pour les tests ; l'accès public passera par Caddy (réseau proxy)
+    ports:
+      - "127.0.0.1:8086:8000"
+    environment:
+      DB_HOST: postgres
+      DB_NAME: taches
+      DB_USER: taches
+      TZ: Europe/Paris
+    secrets:
+      - db_password
+      - api_key
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
+          pids: 100
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz/ready', timeout=3)"
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 40s
+    stop_grace_period: 30s
+    networks:
+      db:
+      proxy:
+        aliases: [taches-app]     # nom utilisé par Caddy
+
+secrets:
+  db_password:
+    file: ./secrets/db_password   # créé par postgres/scripts/create-app-db.sh taches
+  api_key:
+    file: ./secrets/api_key       # clé d'API attendue dans l'en-tête X-API-Key
+
+networks:
+  db:
+    external: true
+  proxy:
+    external: true
