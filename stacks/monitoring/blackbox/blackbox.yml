@@ -1,0 +1,34 @@
+# Configuration du blackbox exporter.
+#
+# Un "module" decrit UNE facon de sonder. Prometheus choisit le module a
+# utiliser via le parametre ?module=... dans prometheus.yml.
+#
+# Documentation : https://github.com/prometheus/blackbox_exporter
+
+modules:
+
+  # Sonde HTTP standard : on attend une reponse 2xx.
+  http_200:
+    prober: http
+    timeout: 8s
+    http:
+      method: GET
+      valid_http_versions: [HTTP/1.1, HTTP/2.0]
+      valid_status_codes: []          # liste vide = tous les codes 2xx acceptes
+      follow_redirects: true
+      fail_if_not_ssl: true           # echoue si la connexion finale n'est pas en HTTPS
+      preferred_ip_protocol: ip4
+
+  # Sonde d'un point d'entree protege : le succes attendu EST un 401.
+  # Si cette sonde echoue avec un code 200, c'est que l'authentification
+  # ne protege plus l'API.
+  http_401:
+    prober: http
+    timeout: 8s
+    http:
+      method: GET
+      valid_http_versions: [HTTP/1.1, HTTP/2.0]
+      valid_status_codes: [401]
+      follow_redirects: false
+      fail_if_not_ssl: true
+      preferred_ip_protocol: ip4

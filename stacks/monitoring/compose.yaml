@@ -96,6 +96,20 @@ services:
           pids: 200
     networks: [monitoring]
 
+  blackbox:
+    image: prom/blackbox-exporter:v0.29.1
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/blackbox/blackbox.yml
+      - --web.listen-address=0.0.0.0:9115
+    volumes:
+      - ./blackbox/blackbox.yml:/etc/blackbox/blackbox.yml:ro
+    security_opt:
+      - no-new-privileges:true
+      
+    cap_drop: [ALL]
+    networks: [monitoring]
+
   # Affiche les mesures. Accessible uniquement par tunnel SSH.
   grafana:
     image: grafana/grafana-oss:13.0.2

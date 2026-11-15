@@ -1,0 +1,46 @@
+# Regles d'alerte portant sur les sondes HTTP externes (blackbox exporter).
+#
+# Prometheus charge rules/*.yml : ce fichier est pris en compte sans
+# modifier alertes.yml.
+#
+# NOTE : verifie la cle utilisee dans "labels:" par alertes.yml et aligne-la
+# si tu n'utilises pas "severite".
+
+groups:
+  - name: sondes
+    rules:
+
+      # La sonde echoue : connexion impossible, delai depasse, TLS invalide,
+      # ou code HTTP different de celui attendu par le module.
+      # Le "for: 5m" evite une alerte sur un incident reseau passager.
+      - alert: SondeHttpEnEchec
+        expr: probe_success == 0
+        for: 5m
+        labels:
+          severite: critique
+        annotations:
+          summary: "{{ $labels.instance }} ne repond pas comme attendu"
+          description: "La sonde echoue depuis 5 minutes : connexion impossible, ou code HTTP different de celui attendu."
+
+      # Caddy renouvelle ses certificats a 30 jours restants.
+      # Si ce seuil de 21 jours est franchi, trois semaines de tentatives de
+      # renouvellement ont echoue : il reste du temps, mais il faut agir.
+      - alert: CertificatBientotExpire
+        expr: probe_ssl_earliest_cert_expiry - time() < 21 * 24 * 3600
+        for: 1h
+        labels:
+          severite: avertissement
+        annotations:
+          summary: "Certificat TLS de {{ $labels.instance }} proche de l'expiration"
+          description: "Expiration dans {{ $value | humanizeDuration }}. Le renouvellement automatique par Caddy a probablement echoue."
+
+      # Degradation sans panne : le service repond, mais mal.
+      # Seuil volontairement large (5 s) pour un VPS mutualise.
+      - alert: ReponseHttpLente
+        expr: probe_duration_seconds > 5
+        for: 15m
+        labels:
+          severite: avertissement
+        annotations:
+          summary: "{{ $labels.instance }} repond en plus de 5 s"
+          description: "Temps de reponse actuel : {{ $value | printf \"%.1f\" }} s, depuis 15 minutes."
