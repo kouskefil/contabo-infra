@@ -70,3 +70,29 @@ groups:
         annotations:
           resume: "{{ $labels.name }} à {{ $value | printf \"%.0f\" }} % de sa limite mémoire"
           detail: "Au-delà de 100 %, Docker arrête le conteneur (OOM). Augmenter la limite ou corriger la fuite."
+
+  - name: sauvegardes
+    rules:
+      - alert: SauvegardeEnEchec
+        expr: pg_backup_last_run_success == 0
+        for: 5m
+        labels: { severite: critique }
+        annotations:
+          resume: "La sauvegarde PostgreSQL a échoué"
+          detail: "Voir : journalctl -u pg-backup.service -n 30"
+
+      - alert: SauvegardeTropAncienne
+        expr: time() - pg_backup_last_run_timestamp_seconds > 36 * 3600
+        for: 30m
+        labels: { severite: critique }
+        annotations:
+          resume: "Aucune sauvegarde depuis plus de 36 h"
+          detail: "La sauvegarde tourne à 02:30 chaque nuit. Voir : systemctl list-timers pg-backup.timer"
+
+      - alert: MetriqueSauvegardeAbsente
+        expr: absent(pg_backup_last_run_timestamp_seconds)
+        for: 2h
+        labels: { severite: avertissement }
+        annotations:
+          resume: "Plus aucune métrique de sauvegarde"
+          detail: "Le fichier /srv/metrics/pg_backup.prom n'est plus lu par node-exporter."

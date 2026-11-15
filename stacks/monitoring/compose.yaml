@@ -50,11 +50,14 @@ services:
       - --path.sysfs=/host/sys
       - --path.rootfs=/host/root
       - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
+      # Lit les fichiers .prom déposés par nos scripts (ex. la sauvegarde PostgreSQL)
+      - --collector.textfile.directory=/textfile
     pid: host
     volumes:                                 # lecture seule : il observe, il ne touche à rien
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
       - /:/host/root:ro,rslave
+      - /srv/metrics:/textfile:ro
     read_only: true
     cap_drop: [ALL]
     security_opt:
