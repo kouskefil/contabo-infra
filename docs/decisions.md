@@ -121,3 +121,18 @@
 - Décision : ce projet reste centré sur l'infrastructure. L'apprentissage de SOAP (XSD, WSDL, Faults, WS-Security, tests, client, MTOM, versionnement) se fera dans un projet Claude séparé, à partir d'un dossier de passation construit sur clients-ws.
 - Suite de la Phase 5 : application FastAPI, test de reboot, puis document complet du processus de déploiement d'une application.
 - Méthode : étapes plus petites, concept expliqué avant la commande.
+
+## 2026-11-15 — Deuxième application : taches-api (FastAPI)
+- Décision : API de référence FastAPI (Python 3.13, psycopg 3 avec pool, sans ORM), déployée selon le même modèle que clients-ws : dépôt `kouskefil/taches-api`, stack `stacks/taches`, base `taches`, build sur le VPS.
+- Authentification par clé d'API (en-tête X-API-Key, secret `secrets/api_key`, comparaison en temps constant).
+- Exposition : https://api.kouskefil.tech/taches via Caddy ; /docs et /healthz non routés (404).
+- Versions figées dans requirements.txt (fastapi 0.162.2, uvicorn 0.54.0, psycopg 3.3.5) ; dépendances transitives non verrouillées (à traiter en Phase 7).
+- Caddyfile validé par un conteneur jetable avant chaque redémarrage de Caddy.
+
+## 2026-11-15 — Test de reboot réussi
+- Constat : après `sudo reboot`, les cinq conteneurs (caddy, postgres, demo, clients, taches) sont `healthy` en 41 secondes, sans aucune relance ; pare-feu, fail2ban, swap et timer de sauvegarde actifs ; les deux services répondent par leur adresse publique.
+- Conséquence : le reboot automatique nocturne (04:30) est validé pour les applications en place.
+
+## 2026-11-15 — Procédure de déploiement documentée
+- Décision : docs/deploiement-application.md décrit la procédure complète (deux dépôts, deploy key, base, secrets, build, tests, exposition, mise à jour, retour arrière, pièges). À réviser en Phase 7 quand GitLab CI remplacera le build sur le VPS.
+- docs/passation-formation-soap.md : dossier de contexte pour le projet séparé de formation SOAP.

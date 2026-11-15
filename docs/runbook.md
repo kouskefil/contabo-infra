@@ -130,3 +130,21 @@ Variables : `LATEST=$(ls -1d /srv/backups/postgres/20* | tail -1)`, depuis /srv/
 1. Dépôt de l'application sur GitHub ; sur le VPS : deploy key dédiée (`~/.ssh/github_<app>_deploy`), alias SSH `github-<app>`, clone dans /srv/apps/<app> avec `pull.ff only`.
 2. Base : `create-app-db.sh <app>` (voir « Nouvelle application avec base de données »).
 3. Stack dans contabo-infra : `build.context: /srv/apps/<app>`, secret `db_password`, réseau `db`, `user: ${APP_UID}:${APP_GID}`.
+
+## Application taches-api (FastAPI) — /srv/stacks/taches, code dans /srv/apps/taches-api
+- État : `cd /srv/stacks/taches && docker compose ps` ; logs : `docker compose logs -f --tail=100 app`
+- Public : https://api.kouskefil.tech/taches ; local : http://127.0.0.1:8086 (documentation interactive : /docs, par tunnel `ssh -N -L 8086:127.0.0.1:8086 contabo-vps`)
+- Authentification : en-tête `X-API-Key`, clé dans /srv/stacks/taches/secrets/api_key.
+- Test complet (sur le VPS) : `cd /srv/apps/taches-api && samples/demo.sh` (ou `samples/demo.sh https://api.kouskefil.tech`) ; codes attendus : 201, 200, 200, 200, 204, 404, 422, 401.
+- Santé : `curl -s http://127.0.0.1:8086/healthz/ready`
+- Mettre à jour : `git -C /srv/apps/taches-api pull`, puis `cd /srv/stacks/taches && docker compose build && docker compose up -d`
+- Changer la clé d'API : réécrire secrets/api_key (sans retour à la ligne), puis `docker compose up -d --force-recreate`.
+
+## Déployer, mettre à jour ou retirer une application
+- Procédure complète : docs/deploiement-application.md.
+- Valider le Caddyfile avant de redémarrer Caddy : `docker run --rm -v /srv/stacks/proxy/Caddyfile:/etc/caddy/Caddyfile:ro caddy:2.11.7-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile`
+- Retour arrière rapide : `docker tag <depot>:precedent <depot>:local`, puis `docker compose up -d --force-recreate` (suppose un `docker tag <depot>:local <depot>:precedent` avant la mise à jour).
+
+## Après un redémarrage du serveur
+- Rien à faire : tout redémarre seul (testé le 2026-11-15). Contrôle : `uptime && docker ps --format 'table {{.Names}}\t{{.Status}}'`
+- Relances d'un conteneur : `docker inspect --format '{{.Name}} {{.RestartCount}}' $(docker ps -q)`
