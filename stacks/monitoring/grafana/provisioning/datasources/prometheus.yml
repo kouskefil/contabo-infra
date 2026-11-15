@@ -1,0 +1,16 @@
+# Source de données Grafana — Phase 6.3
+# Ce fichier évite de configurer Prometheus à la main dans l'interface :
+# Grafana le lit au démarrage. La source est verrouillée (editable: false)
+# pour qu'elle reste décrite par Git, pas par des clics.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    uid: prometheus
+    access: proxy                     # Grafana interroge Prometheus lui-même, pas le navigateur
+    url: http://prometheus:9090       # nom du conteneur sur le réseau monitoring
+    isDefault: true
+    editable: false
+    jsonData:
+      timeInterval: 30s               # doit correspondre au scrape_interval de Prometheus
