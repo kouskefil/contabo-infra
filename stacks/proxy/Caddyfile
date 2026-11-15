@@ -33,6 +33,15 @@ api.kouskefil.tech {
 		}
 		reverse_proxy clients-app:8080
 	}
+
+@taches path /taches /taches/*
+	handle @taches {
+		request_body {
+			max_size 1MB
+		}
+		reverse_proxy taches-app:8000
+	}
+
 	handle {
 		respond 404
 	}
